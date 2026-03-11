@@ -124,7 +124,7 @@ func checkSensitiveData(pass *analysis.Pass, expr *ast.BinaryExpr) {
 	if !containsIdent(expr) {
 		return
 	}
-	if slices.ContainsFunc(extractLiterals(expr), sensitivePattern.MatchString) {
+	if slices.ContainsFunc(extractLiterals(expr), sensitivePattern.MatchString) || slices.ContainsFunc(extractIdents(expr), sensitivePattern.MatchString) {
 		pass.Reportf(expr.Pos(), "log message may contain sensitive data")
 		return
 	}
@@ -142,6 +142,18 @@ func extractLiterals(expr ast.Expr) []string {
 	case *ast.BinaryExpr:
 		if e.Op == token.ADD {
 			return append(extractLiterals(e.X), extractLiterals(e.Y)...)
+		}
+	}
+	return nil
+}
+
+func extractIdents(expr ast.Expr) []string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return []string{e.Name}
+	case *ast.BinaryExpr:
+		if e.Op == token.ADD {
+			return append(extractIdents(e.X), extractIdents(e.Y)...)
 		}
 	}
 	return nil
