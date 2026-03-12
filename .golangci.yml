@@ -1,0 +1,18 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - loglinter
+  settings:
+    custom:
+      loglinter:
+        type: module
+        description: linter for log messages
+        settings:
+          sensitive_patterns:
+            - password
+            - token
+            - api_key
+            - apikey
+            - creds

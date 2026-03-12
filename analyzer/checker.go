@@ -1,18 +1,18 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/tools/go/analysis"
 )
-
-var sensitivePattern = regexp.MustCompile(`(?i)(password|token|api_key|apikey|creds)`)
 
 var knownMethods = map[string]struct{}{
 	"Info": {}, "Error": {}, "Warn": {}, "Debug": {}, "Fatal": {},
@@ -21,6 +21,10 @@ var knownMethods = map[string]struct{}{
 }
 
 func run(pass *analysis.Pass) (any, error) {
+	sensitivePattern, err := buildSensitivePattern()
+	if err != nil {
+		return nil, fmt.Errorf("loglinter: invalid sensitive pattern in config: %w", err)
+	}
 	for _, file := range pass.Files {
 		ast.Inspect(file, func(n ast.Node) bool {
 			ce, ok := n.(*ast.CallExpr)
@@ -45,19 +49,19 @@ func run(pass *analysis.Pass) (any, error) {
 			if len(ce.Args) == 0 {
 				return true
 			}
-			checkArg(pass, ce.Args[0])
+			checkArg(pass, ce.Args[0], sensitivePattern)
 			return true
 		})
 	}
 	return nil, nil
 }
 
-func checkArg(pass *analysis.Pass, firstArg ast.Expr) {
+func checkArg(pass *analysis.Pass, firstArg ast.Expr, sensitivePattern *regexp.Regexp) {
 	switch arg := firstArg.(type) {
 	case *ast.BasicLit:
 		checkLiteralArg(pass, arg)
 	case *ast.BinaryExpr:
-		checkConcatArg(pass, arg)
+		checkConcatArg(pass, arg, sensitivePattern)
 	}
 }
 
@@ -74,7 +78,7 @@ func checkLiteralArg(pass *analysis.Pass, arg *ast.BasicLit) {
 	checkSpecialChars(pass, arg.Pos(), msg)
 }
 
-func checkConcatArg(pass *analysis.Pass, expr *ast.BinaryExpr) {
+func checkConcatArg(pass *analysis.Pass, expr *ast.BinaryExpr, sensitivePattern *regexp.Regexp) {
 	for i, lit := range extractLiterals(expr) {
 		if i == 0 {
 			checkLowercase(pass, expr.Pos(), lit)
@@ -82,7 +86,7 @@ func checkConcatArg(pass *analysis.Pass, expr *ast.BinaryExpr) {
 		checkEnglishLetters(pass, expr.Pos(), lit)
 		checkSpecialChars(pass, expr.Pos(), lit)
 	}
-	checkSensitiveData(pass, expr)
+	checkSensitiveData(pass, expr, sensitivePattern)
 }
 
 func checkLowercase(pass *analysis.Pass, pos token.Pos, msg string) {
@@ -120,8 +124,8 @@ func isAllowedRune(r rune) bool {
 		r == ' ' || r == '-' || r == '_' || r == '=' || r == ',' || r == '%' || r == ':'
 }
 
-func checkSensitiveData(pass *analysis.Pass, expr *ast.BinaryExpr) {
-	if !containsIdent(expr) {
+func checkSensitiveData(pass *analysis.Pass, expr *ast.BinaryExpr, sensitivePattern *regexp.Regexp) {
+	if sensitivePattern == nil || !containsIdent(expr) {
 		return
 	}
 	if slices.ContainsFunc(extractIdents(expr), sensitivePattern.MatchString) {
@@ -150,7 +154,7 @@ func extractLiterals(expr ast.Expr) []string {
 func extractIdents(expr ast.Expr) []string {
 	switch e := expr.(type) {
 	case *ast.Ident:
-		return []string{e.Name}
+		return []string{strings.ToLower(e.Name)}
 	case *ast.BinaryExpr:
 		if e.Op == token.ADD {
 			return append(extractIdents(e.X), extractIdents(e.Y)...)

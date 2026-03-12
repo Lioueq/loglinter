@@ -1,0 +1,6 @@
+version: v2.11.3
+name: custom-golangci-lint
+plugins:
+  - module: github.com/lioueq/loglinter
+    import: github.com/lioueq/loglinter/plugin
+    path: .
