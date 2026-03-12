@@ -1,8 +1,9 @@
 package analyzer_test
 
 import (
-	"loglinter/analyzer"
 	"testing"
+
+	"github.com/lioueq/loglinter/analyzer"
 
 	"golang.org/x/tools/go/analysis/analysistest"
 )

@@ -124,7 +124,7 @@ func checkSensitiveData(pass *analysis.Pass, expr *ast.BinaryExpr) {
 	if !containsIdent(expr) {
 		return
 	}
-	if slices.ContainsFunc(extractLiterals(expr), sensitivePattern.MatchString) || slices.ContainsFunc(extractIdents(expr), sensitivePattern.MatchString) {
+	if slices.ContainsFunc(extractIdents(expr), sensitivePattern.MatchString) {
 		pass.Reportf(expr.Pos(), "log message may contain sensitive data")
 		return
 	}
